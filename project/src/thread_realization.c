@@ -22,7 +22,7 @@ typedef struct thread_args {
 
 static void *thread_func(void *arg);
 
-task *multi_thread_run(int fd) {
+task* multi_thread_run(int fd) {
     // int number_of_cores = sysconf(_SC_NPROCESSORS_ONLN);
     int number_of_cores = 8;
 
@@ -33,54 +33,54 @@ task *multi_thread_run(int fd) {
         return NULL;
     }
 
-    int *file_in_memory = mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    int* mapped_file = mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
-    if (file_in_memory == MAP_FAILED) {
+    if (mapped_file == MAP_FAILED) {
         perror("mmap");
         return NULL;
     }
 
-    pthread_t *worker_pull = malloc(sizeof(pthread_t) * number_of_cores);
+    pthread_t* workers_pull = malloc(sizeof(pthread_t) * number_of_cores);
 
     if (!worker_pull) {
         perror("malloc");
         return NULL;
     }
 
-    task *result_task_pull = malloc(sizeof(task) * TASK_COUNT);
+    task* tasks_pull = malloc(sizeof(task) * TASK_COUNT);
 
-    if (!result_task_pull) {
+    if (!tasks_pull) {
         perror("malloc");
-        free(worker_pull);
+        free(workers_pull);
         return NULL;
     }
 
     for (int i = 0; i < TASK_COUNT; i++) {
-        result_task_pull[i].start_pos = i;
-        result_task_pull[i].sum = 0;
+        tasks_pull[i].start_pos = i;
+        tasks_pull[i].sum = 0;
     }
 
-    thread_args *args = malloc(sizeof(thread_args) * number_of_cores);
+    thread_args* args = malloc(sizeof(thread_args) * number_of_cores);
 
     for (int i = 0; i < number_of_cores; i++) {
         args[i].offset = i * (FILE_SIZE / number_of_cores);
-        args[i].mmap_file_ptr = file_in_memory;
+        args[i].mmap_file_ptr = mapped_file;
         args[i].chunk_size = (FILE_SIZE / number_of_cores);
     }
 
     for (int i = 0; i < number_of_cores; i++) {
-        if (pthread_create(&worker_pull[i], NULL, thread_func, (void *) &args[i])) {
+        if (pthread_create(&workers_pull[i], NULL, thread_func, (void *) &args[i])) {
             perror("pthread_create");
         }
     }
 
     for (int i = 0; i < number_of_cores; i++) {
-        task *worker_task = NULL;
+        task* worker_task = NULL;
 
-        pthread_join(worker_pull[i], (void *) &worker_task);
+        pthread_join(workers_pull[i], (void *) &worker_task);
 
         for (int j = 0; j < TASK_COUNT; j++) {
-            result_task_pull[j].sum += worker_task[j].sum;
+            tasks_pull[j].sum += worker_task[j].sum;
         }
 
         free(worker_task);
@@ -93,24 +93,23 @@ task *multi_thread_run(int fd) {
     return result_task_pull;
 }
 
-
 static void *thread_func(void *arg) {
-    thread_args my_args = *(thread_args*) arg;
+    thread_args args = *(thread_args*) arg;
 
-    task *my_task = malloc(sizeof(task) * TASK_COUNT);
+    task* worker_tasks = malloc(sizeof(task) * TASK_COUNT);
 
     for (int i = 0; i < TASK_COUNT; i++) {
-        my_task[i].start_pos = i;
-        my_task[i].sum = 0;
+        worker_tasks[i].start_pos = i;
+        worker_tasks[i].sum = 0;
     }
 
-    int *buf = my_args.mmap_file_ptr;
-    int offset = my_args.offset;
-    int finish = offset + my_args.chunk_size;
+    int* buf = args.mmap_file_ptr;
+    int offset = args.offset;
+    int finish = offset + args.chunk_size;
 
     for (int i = offset; i < finish; i++) {
-        my_task[i % TASK_COUNT].sum += buf[i];
+        worker_tasks[i % TASK_COUNT].sum += buf[i];
     }
 
-    pthread_exit((void *) my_task);
+    pthread_exit((void *) worker_tasks);
 }
