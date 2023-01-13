@@ -9,10 +9,6 @@
 static int *fds_buf = NULL;
 
 static bool task_compare(const task *A, const task *B) {
-    if (A->start_pos != B->start_pos) {
-        return false;
-    }
-
     if (A->sum != B->sum) {
         return false;
     }

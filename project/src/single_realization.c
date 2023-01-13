@@ -12,17 +12,7 @@
 
 #define TASK_COUNT 10
 
-static int job(int *buf, int start_pos) {
-    int result = 0;
-
-    for (int i = start_pos; i < FILE_SIZE; i += 10) {
-        result += buf[i];
-    }
-
-    return result;
-}
-
-task *single_thread_run(int fd) {
+task* single_thread_run(int fd) {
     struct stat file_stat = {};
 
     if (fstat(fd, &file_stat) == -1) {
@@ -30,33 +20,33 @@ task *single_thread_run(int fd) {
         return NULL;
     }
 
-    int *file_in_memory = mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    int* mapped_file = mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
-    if (file_in_memory == MAP_FAILED) {
+    if (mapped_file == MAP_FAILED) {
         perror("mmap");
         return NULL;
     }
 
-    task *task_pull = malloc(sizeof(task) * TASK_COUNT);
+    task* tasks_pull = malloc(sizeof(task) * TASK_COUNT);
 
-    if (!task_pull) {
+    if (!tasks_pull) {
         perror("malloc");
         return NULL;
     }
 
     for (int i = 0; i < TASK_COUNT; i++) {
-        task_pull[i].start_pos = i;
-
-        int result = job(file_in_memory, i);
-
-        task_pull[i].sum = result;
+        tasks_pull[i].sum = 0;
     }
 
-    if (munmap(file_in_memory, file_stat.st_size)) {
+    for (int j = 0; j < FILE_SIZE; j++) {
+        tasks_pull[j % TASK_COUNT].sum += mapped_file[j];
+    }
+
+    if (munmap(mapped_file, file_stat.st_size)) {
         perror("munmap");
-        free(task_pull);
+        free(tasks_pull);
         return NULL;
     }
 
-    return task_pull;
+    return tasks_pull;
 }
